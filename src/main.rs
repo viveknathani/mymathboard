@@ -1,9 +1,17 @@
+use iced::border::Radius;
 use iced::event;
 use iced::mouse;
 use iced::widget::canvas;
 use iced::widget::canvas::Event;
 use iced::widget::canvas::Stroke;
+use iced::widget::Button;
+use iced::widget::Column;
+use iced::widget::Container;
+use iced::widget::Row;
+use iced::Border;
+use iced::Color;
 use iced::Element;
+use iced::Length;
 use iced::Point;
 use iced::Rectangle;
 use iced::Renderer;
@@ -16,6 +24,8 @@ enum MyMathBoardMessage {
     Dragged(Vector),
     StartDrag(Point),
     EndDrag,
+    ZoomIn,
+    ZoomOut,
 }
 
 pub type State = ();
@@ -117,6 +127,23 @@ impl canvas::Program<MyMathBoardMessage> for Grid {
     }
 }
 
+fn button_style() -> iced::widget::button::Style {
+    iced::widget::button::Style {
+        background: Some(Color::BLACK.into()),
+        text_color: Color::WHITE,
+        border: Border {
+            radius: Radius {
+                top_left: 5.0,
+                top_right: 5.0,
+                bottom_left: 5.0,
+                bottom_right: 5.0,
+            },
+            ..Default::default()
+        },
+        ..iced::widget::button::Style::default()
+    }
+}
+
 #[derive(Default)]
 struct MyMathBoardApp {
     grid: Grid,
@@ -140,11 +167,48 @@ impl MyMathBoardApp {
                 self.grid.is_dragging = false;
                 self.grid.last_cursor_position = None;
             }
+            MyMathBoardMessage::ZoomIn => {
+                self.grid.cell_size = (self.grid.cell_size as f32 * 1.1).ceil() as u64;
+            }
+            MyMathBoardMessage::ZoomOut => {
+                self.grid.cell_size = (self.grid.cell_size as f32 * 0.9).ceil() as u64;
+            }
         }
     }
 
     fn view(&self) -> Element<MyMathBoardMessage> {
-        canvas(self.grid).width(1000).height(1000).into()
+        let zoom_in_button = Button::new("+")
+            .on_press(MyMathBoardMessage::ZoomIn)
+            .width(50)
+            .height(50)
+            .style(|_theme, _| button_style());
+
+        let zoom_out_button = Button::new("-")
+            .on_press(MyMathBoardMessage::ZoomOut)
+            .width(50)
+            .height(50)
+            .style(|_theme, _| button_style());
+
+        let canvas = canvas(self.grid).width(1000.0).height(1000.0);
+
+        let controls = Row::new()
+            .spacing(10)
+            .push(zoom_in_button)
+            .push(zoom_out_button)
+            .padding(10);
+
+        Column::new()
+            .push(
+                Container::new(canvas)
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .push(
+                Container::new(controls)
+                    .width(Length::Shrink)
+                    .height(Length::Shrink),
+            )
+            .into()
     }
 }
 
