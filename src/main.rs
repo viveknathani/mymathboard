@@ -8,6 +8,7 @@ use iced::widget::Button;
 use iced::widget::Column;
 use iced::widget::Container;
 use iced::widget::Row;
+use iced::widget::TextInput;
 use iced::Border;
 use iced::Color;
 use iced::Element;
@@ -18,24 +19,27 @@ use iced::Renderer;
 use iced::Size;
 use iced::Theme;
 use iced::Vector;
+use meval::Expr;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum MyMathBoardMessage {
     Dragged(Vector),
     StartDrag(Point),
     EndDrag,
     ZoomIn,
     ZoomOut,
+    EquationUpdated(String),
 }
 
 pub type State = ();
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 struct Grid {
     cell_size: u64,
     viewport_offset: Vector,
     last_cursor_position: Option<Point>,
     is_dragging: bool,
+    parsed_equation: Option<Expr>,
 }
 
 impl Default for Grid {
@@ -45,6 +49,7 @@ impl Default for Grid {
             cell_size: 100,
             viewport_offset: Vector::new(0.0, 0.0),
             last_cursor_position: None,
+            parsed_equation: None,
         }
     }
 }
@@ -84,6 +89,36 @@ impl canvas::Program<MyMathBoardMessage> for Grid {
                 );
                 frame.stroke(&cell, Stroke::default().with_width(1.0));
             }
+        }
+
+        if let Some(expr) = &self.parsed_equation {
+            let start_x = (self.viewport_offset.x / self.cell_size as f32).floor() as f32;
+            let end_x = ((self.viewport_offset.x + bounds.width as f32) / self.cell_size as f32)
+                .ceil() as f32;
+
+            let path = canvas::Path::new(|builder: &mut canvas::path::Builder| {
+                for x in (start_x as i32)..(end_x as i32) {
+                    let x = x as f64;
+                    let calc = expr.clone().bind("x");
+                    if calc.is_ok() {
+                        let y = Some(x).map(calc.unwrap()).unwrap_or_else(|| 0.0);
+                        let screen_x = x as f32 * self.cell_size as f32 - self.viewport_offset.x;
+                        let screen_y = y as f32 * self.cell_size as f32 - self.viewport_offset.y;
+
+                        if x as i32 == start_x as i32 {
+                            builder.move_to(Point::new(screen_x, screen_y));
+                        } else {
+                            builder.line_to(Point::new(screen_x, screen_y));
+                        }
+                    }
+                }
+            });
+            frame.stroke(
+                &path,
+                Stroke::default()
+                    .with_width(2.0)
+                    .with_color(Color::from_rgb(255.0, 0.0, 0.0)),
+            );
         }
 
         vec![frame.into_geometry()]
@@ -147,6 +182,8 @@ fn button_style() -> iced::widget::button::Style {
 #[derive(Default)]
 struct MyMathBoardApp {
     grid: Grid,
+    equation: String,
+    parsed_equation: Option<Expr>,
 }
 
 impl MyMathBoardApp {
@@ -173,6 +210,19 @@ impl MyMathBoardApp {
             MyMathBoardMessage::ZoomOut => {
                 self.grid.cell_size = (self.grid.cell_size as f32 * 0.9).ceil() as u64;
             }
+            MyMathBoardMessage::EquationUpdated(equation) => {
+                self.equation = equation.clone();
+                println!("captured updates! {:?}", equation.clone());
+                // Attempt to parse the equation
+                if let Ok(expr) = equation.parse::<Expr>() {
+                    println!("parsed!");
+                    self.parsed_equation = Some(expr.clone());
+                    self.grid.parsed_equation = Some(expr.clone());
+                } else {
+                    self.parsed_equation = None;
+                    self.grid.parsed_equation = None;
+                }
+            }
         }
     }
 
@@ -189,7 +239,7 @@ impl MyMathBoardApp {
             .height(50)
             .style(|_theme, _| button_style());
 
-        let canvas = canvas(self.grid).width(1000.0).height(1000.0);
+        let canvas = canvas(self.grid.clone()).width(1000.0).height(1000.0);
 
         let controls = Row::new()
             .spacing(10)
@@ -197,11 +247,22 @@ impl MyMathBoardApp {
             .push(zoom_out_button)
             .padding(10);
 
+        let equation_input = TextInput::<MyMathBoardMessage, Theme, iced::Renderer>::new(
+            "Enter equation",
+            &self.equation,
+        )
+        .on_input(|input| MyMathBoardMessage::EquationUpdated(input.to_string()));
+
         Column::new()
             .push(
                 Container::new(canvas)
                     .width(Length::Fill)
                     .height(Length::Fill),
+            )
+            .push(
+                Container::new(equation_input)
+                    .width(Length::Fill)
+                    .height(Length::Shrink),
             )
             .push(
                 Container::new(controls)
