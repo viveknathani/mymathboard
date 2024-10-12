@@ -42,6 +42,7 @@ impl Repl {
             context: HashMapContext::new(),
         };
         object.setup_math_functions();
+        object.setup_point_function();
         object
     }
 
@@ -52,6 +53,31 @@ impl Repl {
             evalexpr::Value::Int(value) => Ok(ReplResult::Number(value as f64)),
             evalexpr::Value::Float(value) => Ok(ReplResult::Number(value)),
             evalexpr::Value::String(value) => Ok(ReplResult::String(value)),
+            evalexpr::Value::Tuple(value) => {
+                let x = match &value[0] {
+                    evalexpr::Value::Float(val) => *val,
+                    evalexpr::Value::Int(val) => *val as f64,
+                    _ => {
+                        return Err(Box::new(EvalexprError::ExpectedNumber {
+                            actual: Value::Empty,
+                        }))
+                    }
+                };
+
+                let y = match &value[1] {
+                    evalexpr::Value::Float(val) => *val,
+                    evalexpr::Value::Int(val) => *val as f64,
+                    _ => {
+                        return Err(Box::new(EvalexprError::ExpectedNumber {
+                            actual: Value::Empty,
+                        }))
+                    }
+                };
+
+                let point = Point { x, y };
+
+                Ok(ReplResult::Point(point))
+            }
             _ => Ok(ReplResult::Empty),
         }
     }
@@ -654,6 +680,47 @@ impl Repl {
                         Ok(Value::String(decimal.to_string()))
                     } else {
                         Err(EvalexprError::ExpectedString {
+                            actual: Value::Empty,
+                        })
+                    }
+                }),
+            )
+            .unwrap();
+    }
+
+    fn setup_point_function(&mut self) {
+        self.context
+            .set_function(
+                "Point".to_string(),
+                Function::new(|args| {
+                    if let Value::Tuple(tuple) = &args {
+                        let x = match &tuple[0] {
+                            Value::Float(val) => *val,
+                            Value::Int(val) => *val as f64,
+                            _ => {
+                                return Err(evalexpr::EvalexprError::ExpectedNumber {
+                                    actual: Value::Empty,
+                                })
+                            }
+                        };
+
+                        let y = match &tuple[1] {
+                            Value::Float(val) => *val,
+                            Value::Int(val) => *val as f64,
+                            _ => {
+                                return Err(evalexpr::EvalexprError::ExpectedNumber {
+                                    actual: Value::Empty,
+                                })
+                            }
+                        };
+
+                        let point = (x, y);
+                        Ok(Value::Tuple(vec![
+                            Value::Float(point.0),
+                            Value::Float(point.1),
+                        ]))
+                    } else {
+                        Err(evalexpr::EvalexprError::ExpectedTuple {
                             actual: Value::Empty,
                         })
                     }
