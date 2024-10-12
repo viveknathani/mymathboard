@@ -1,18 +1,23 @@
 use evalexpr::eval_with_context_mut;
 use evalexpr::ContextWithMutableFunctions;
+use evalexpr::ContextWithMutableVariables;
 use evalexpr::EvalexprError;
 use evalexpr::Function;
 use evalexpr::HashMapContext;
 use evalexpr::Value;
+use regex::Regex;
 use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct Repl {
     context: HashMapContext,
+    regex_list_pattern: Regex,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Array {}
+#[derive(Debug, Clone)]
+pub struct Array {
+    pub items: Vec<ReplResult>,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Point {
@@ -20,7 +25,7 @@ pub struct Point {
     pub y: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ReplResult {
     Empty,
     Boolean(bool),
@@ -40,6 +45,7 @@ impl Repl {
     pub fn new() -> Self {
         let mut object = Repl {
             context: HashMapContext::new(),
+            regex_list_pattern: Regex::new(r"^(\w+)\s*=\s*List\s*\((.*)\)$").unwrap(),
         };
         object.setup_math_functions();
         object.setup_point_function();
@@ -47,6 +53,12 @@ impl Repl {
     }
 
     pub fn process_input(&mut self, input: &str) -> Result<ReplResult, Box<dyn Error>> {
+        if let Some(captures) = self.regex_list_pattern.captures(input.trim_end()) {
+            let name = captures.get(1).unwrap().as_str().trim();
+            let values = captures.get(2).unwrap().as_str().trim();
+            return self.create_list(name, values);
+        }
+
         let evaluation_result = eval_with_context_mut(input, &mut self.context)?;
         match evaluation_result {
             evalexpr::Value::Boolean(value) => Ok(ReplResult::Boolean(value)),
@@ -727,5 +739,82 @@ impl Repl {
                 }),
             )
             .unwrap();
+    }
+
+    fn create_list(&mut self, name: &str, values: &str) -> Result<ReplResult, Box<dyn Error>> {
+        let mut parsed_values = Vec::new();
+        let mut temp_str = String::new();
+        let mut parentheses_depth = 0;
+        println!("{:?}", values);
+
+        for ch in values.chars() {
+            if ch == '(' {
+                parentheses_depth += 1;
+            } else if ch == ')' {
+                parentheses_depth -= 1;
+                if parentheses_depth < 0 {
+                    parentheses_depth = 0;
+                }
+            }
+
+            if parentheses_depth == 0 && ch == ',' {
+                if let Some(value) = self.parse_value(&temp_str.trim()) {
+                    parsed_values.push(value);
+                }
+                temp_str.clear();
+            } else {
+                temp_str.push(ch);
+            }
+        }
+
+        // Handle any remaining value in temp_str
+        if !temp_str.is_empty() {
+            if let Some(value) = self.parse_value(&temp_str.trim()) {
+                parsed_values.push(value);
+            }
+        }
+
+        let list = Array {
+            items: parsed_values,
+        };
+
+        let serialized_list = format!("List({:?})", list.items);
+
+        self.context
+            .set_value(name.to_string(), Value::String(serialized_list))
+            .unwrap();
+
+        Ok(ReplResult::List(list))
+    }
+
+    fn parse_value(&self, value: &str) -> Option<ReplResult> {
+        if let Some(point) = self.parse_point(value) {
+            return Some(ReplResult::Point(point));
+        }
+
+        println!("value is {:?}", value);
+
+        if let Ok(num) = value.parse::<f64>() {
+            return Some(ReplResult::Number(num));
+        } else if let Ok(boolean) = value.parse::<bool>() {
+            return Some(ReplResult::Boolean(boolean));
+        }
+
+        None
+    }
+
+    fn parse_point(&self, value: &str) -> Option<Point> {
+        let trimmed = value.trim();
+        if trimmed.starts_with("Point((") && trimmed.ends_with("))") {
+            let inside = &trimmed[7..trimmed.len() - 2];
+            let coords: Vec<&str> = inside.split(',').map(|s| s.trim()).collect();
+
+            if coords.len() == 2 {
+                if let (Ok(x), Ok(y)) = (coords[0].parse::<f64>(), coords[1].parse::<f64>()) {
+                    return Some(Point { x, y });
+                }
+            }
+        }
+        None
     }
 }

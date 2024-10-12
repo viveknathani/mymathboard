@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 evalexpr = "11.3.0"
 iced = { version = "0.13.1", features = ["canvas"] }
+regex = "1.11.0"
