@@ -1,18 +1,13 @@
-use mymathboard::repl::Repl;
-use std::io;
-use std::io::Write;
+use iced::Size;
+use iced::Theme;
+use mymathboard::app::ui::MyMathBoardApp;
 
-fn main() {
-    let mut repl = Repl::new();
-    loop {
-        let mut input = String::new();
-        print!(">>> ");
-        io::stdout().flush().unwrap();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read input");
-
-        let result = repl.process_input(&input);
-        println!("=> {:?}", result);
-    }
+fn main() -> iced::Result {
+    iced::application("mymathboard", MyMathBoardApp::update, MyMathBoardApp::view)
+        .theme(|_| Theme::Light)
+        .window_size(Size {
+            width: 1000.0,
+            height: 1000.0,
+        })
+        .run()
 }

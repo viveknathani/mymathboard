@@ -17,11 +17,11 @@ use iced::Vector;
 /// The fundamental data structure used to draw a 2D graph on the screen.
 #[derive(Debug, Clone)]
 pub struct Graph {
-    cell_size: u64,
-    is_dragging: bool,
-    viewport_offset: Vector,
-    last_cursor_position: Option<Point>,
-    equations: Vec<Node>,
+    pub cell_size: u64,
+    pub is_dragging: bool,
+    pub viewport_offset: Vector,
+    pub last_cursor_position: Option<Point>,
+    pub equations: Vec<Node>,
 }
 
 impl Default for Graph {
