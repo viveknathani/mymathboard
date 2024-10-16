@@ -1,16 +1,18 @@
 use super::graph::Graph;
 use super::types::MyMathBoardMessage;
 use evalexpr::build_operator_tree;
-use iced::widget::canvas;
-use iced::widget::Button;
+use iced::widget::container;
+use iced::widget::container::Style;
 use iced::widget::Column;
 use iced::widget::Container;
 use iced::widget::Row;
-use iced::widget::TextInput;
+use iced::widget::Space;
+use iced::widget::Text;
+use iced::Background;
+use iced::Color;
 use iced::Element;
 use iced::Length;
 use iced::Point;
-use iced::Theme;
 
 #[derive(Default)]
 pub struct MyMathBoardApp {
@@ -51,44 +53,56 @@ impl MyMathBoardApp {
     }
 
     pub fn view(&self) -> Element<MyMathBoardMessage> {
-        let zoom_in_button = Button::new("+")
-            .on_press(MyMathBoardMessage::ZoomIn)
-            .width(50)
-            .height(50);
+        let control_bar = Container::new(Text::new("vivek's board").color(Color::WHITE))
+            .height(Length::FillPortion(3))
+            .width(Length::Fill);
 
-        let zoom_out_button = Button::new("-")
-            .on_press(MyMathBoardMessage::ZoomOut)
-            .width(50)
-            .height(50);
+        let horizontal_divider = Container::new(Space::with_height(Length::Fixed(1.0)))
+            .width(Length::Fill)
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(Color::WHITE)),
+                ..Default::default()
+            });
 
-        let canvas = canvas(self.graph.clone()).width(1000.0).height(1000.0);
+        let graphing_pane = Container::new(Text::new("graph").color(Color::WHITE))
+            .width(Length::FillPortion(1))
+            .height(Length::Fill)
+            .center_x(Length::Fill);
 
-        let controls = Row::new()
-            .spacing(10)
-            .push(zoom_in_button)
-            .push(zoom_out_button)
-            .padding(10);
+        let vertical_divider = Container::new(Space::with_width(Length::Fixed(1.0))) // Small width for the line
+            .height(Length::Fill)
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(Color::WHITE)), // White line color
+                ..Default::default()
+            });
 
-        let equation_input =
-            TextInput::<MyMathBoardMessage, Theme, iced::Renderer>::new("Enter equation", "")
-                .on_input(|input| MyMathBoardMessage::DrawEquation(input.to_string()));
+        let repl_pane = Container::new(Text::new("repl").color(Color::WHITE))
+            .width(Length::FillPortion(1))
+            .height(Length::Fill)
+            .center_x(Length::Fill);
 
-        Column::new()
+        let content = Column::new()
+            .push(control_bar)
+            .push(horizontal_divider)
             .push(
-                Container::new(canvas)
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-            )
-            .push(
-                Container::new(equation_input)
-                    .width(Length::Fill)
-                    .height(Length::Shrink),
-            )
-            .push(
-                Container::new(controls)
-                    .width(Length::Shrink)
-                    .height(Length::Shrink),
-            )
+                Container::new(
+                    Row::new()
+                        .push(graphing_pane)
+                        .push(vertical_divider)
+                        .push(repl_pane),
+                )
+                .height(Length::FillPortion(95))
+                .width(Length::Fill),
+            );
+
+        Container::new(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(|_| Style {
+                text_color: Some(Color::BLACK),
+                background: Some(Background::from(Color::BLACK)),
+                ..Default::default()
+            })
             .into()
     }
 }
