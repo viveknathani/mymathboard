@@ -9,5 +9,5 @@ fn main() -> iced::Result {
             width: 1000.0,
             height: 1000.0,
         })
-        .run()
+        .run_with(|| MyMathBoardApp::new())
 }

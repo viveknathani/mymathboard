@@ -41,6 +41,12 @@ pub enum ReplError {
     InvalidArgument,
 }
 
+impl Default for Repl {
+    fn default() -> Self {
+        Repl::new()
+    }
+}
+
 impl Repl {
     pub fn new() -> Self {
         let mut object = Repl {

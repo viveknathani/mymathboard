@@ -9,4 +9,6 @@ pub enum MyMathBoardMessage {
     ZoomIn,
     ZoomOut,
     DrawEquation(String),
+    InputChanged(String),
+    InputSubmitted,
 }
