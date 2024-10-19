@@ -6,6 +6,7 @@ use iced::mouse;
 use iced::widget::canvas;
 use iced::widget::canvas::Event;
 use iced::widget::canvas::Stroke;
+use iced::widget::canvas::Text;
 use iced::Color;
 use iced::Point;
 use iced::Rectangle;
@@ -50,6 +51,9 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
         // Get a new frame.
         let mut frame = canvas::Frame::new(renderer, bounds.size());
 
+        let thick_line_width = 2.0;
+        let light_line_width = 1.0;
+
         // Prepare the cell. Our cell is a square.
         let cell_size = Size {
             width: self.cell_size as f32,
@@ -80,6 +84,26 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                         .with_width(1.0)
                         .with_color(Color::from_rgb(150.0, 150.0, 150.0)),
                 );
+
+                if x % 5 == 0 || y % 5 == 0 {
+                    let line = canvas::Path::rectangle(
+                        Point::new(
+                            (x * self.cell_size as isize) as f32 - self.viewport_offset.x,
+                            (y * self.cell_size as isize) as f32 - self.viewport_offset.y,
+                        ),
+                        cell_size,
+                    );
+                    frame.stroke(
+                        &line,
+                        Stroke::default()
+                            .with_width(light_line_width)
+                            .with_color(Color::from_rgb(
+                                200.0 / 255.0,
+                                200.0 / 255.0,
+                                200.0 / 255.0,
+                            )),
+                    );
+                }
             }
         }
 
@@ -113,6 +137,63 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                     .with_color(Color::from_rgb(255.0, 0.0, 0.0)),
             );
         }
+
+        let middle_x = bounds.width / 2.0 - self.viewport_offset.x;
+        let middle_y = bounds.height / 2.0 - self.viewport_offset.y;
+
+        let font_size = iced::Pixels(14.0);
+        let font_color = Color::WHITE;
+
+        for x in start_x..end_x {
+            let screen_x = (x * self.cell_size as isize) as f32 - self.viewport_offset.x;
+            let number = (x * self.cell_size as isize).to_string();
+
+            if screen_x >= 0.0 && screen_x <= bounds.width {
+                frame.fill_text(Text {
+                    content: number.clone(),
+                    position: Point::new(screen_x, middle_y + font_size.0),
+                    color: font_color,
+                    size: font_size,
+                    font: iced::Font::default(),
+                    ..Default::default()
+                });
+            }
+        }
+
+        for y in start_y..end_y {
+            let screen_y = (y * self.cell_size as isize) as f32 - self.viewport_offset.y;
+            let number = (y * self.cell_size as isize).to_string();
+
+            if screen_y >= 0.0 && screen_y <= bounds.height {
+                frame.fill_text(Text {
+                    content: number.clone(),
+                    position: Point::new(middle_x + font_size.0, screen_y),
+                    color: font_color,
+                    size: font_size,
+                    font: iced::Font::default(),
+                    ..Default::default()
+                });
+            }
+        }
+
+        let zero_x = -self.viewport_offset.x;
+        let zero_y = -self.viewport_offset.y;
+        let vertical_axis =
+            canvas::Path::line(Point::new(zero_x, 0.0), Point::new(zero_x, bounds.height));
+        let horizontal_axis =
+            canvas::Path::line(Point::new(0.0, zero_y), Point::new(bounds.width, zero_y));
+        frame.stroke(
+            &vertical_axis,
+            Stroke::default()
+                .with_width(thick_line_width)
+                .with_color(Color::WHITE),
+        );
+        frame.stroke(
+            &horizontal_axis,
+            Stroke::default()
+                .with_width(thick_line_width)
+                .with_color(Color::WHITE),
+        );
 
         vec![frame.into_geometry()]
     }

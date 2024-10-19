@@ -3,6 +3,7 @@ use super::types::MyMathBoardMessage;
 use crate::repl::Repl;
 use evalexpr::build_operator_tree;
 use iced::widget::button;
+use iced::widget::canvas;
 use iced::widget::container;
 use iced::widget::container::Style;
 use iced::widget::text_input;
@@ -105,10 +106,76 @@ impl MyMathBoardApp {
                 ..Default::default()
             });
 
-        let graphing_pane = Container::new(Text::new("graph").color(Color::WHITE))
-            .width(Length::FillPortion(1))
+        let horizontal_divider_graph = Container::new(Space::with_height(Length::Fixed(1.0)))
+            .width(Length::Fill)
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(Color::WHITE)),
+                ..Default::default()
+            });
+
+        let canvas = canvas(self.graph.clone())
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        let coords_text = "x: -, y: -".to_string();
+
+        let coords_display = Text::new(coords_text).color(Color::WHITE).size(16);
+
+        let zoom_in_button = Button::new(Text::new("+").color(Color::WHITE).size(16))
+            .padding(5)
+            .on_press(MyMathBoardMessage::ZoomIn)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                ..Default::default()
+            });
+
+        let zoom_reset_button = Button::new(Text::new("Reset").color(Color::WHITE).size(16))
+            .padding(5)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                ..Default::default()
+            });
+
+        let zoom_out_button = Button::new(Text::new("-").color(Color::WHITE).size(16))
+            .padding(5)
+            .on_press(MyMathBoardMessage::ZoomOut)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                ..Default::default()
+            });
+
+        // let zoom_controls = Row::new()
+        //     .push(zoom_in_button)
+        //     .push(zoom_reset_button)
+        //     .push(zoom_out_button)
+        //     .spacing(10);
+
+        let graph_clear_button = Button::new(Text::new("Clear").color(Color::WHITE).size(16))
+            .padding(5)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                ..Default::default()
+            });
+
+        let graph_bottom_bar = Row::new()
+            .push(coords_display)
+            .push(Space::with_width(Length::Fill))
+            .push(zoom_in_button)
+            .push(Space::with_width(Length::Fill))
+            .push(zoom_reset_button)
+            .push(Space::with_width(Length::Fill))
+            .push(zoom_out_button)
+            .push(Space::with_width(Length::Fill))
+            .push(graph_clear_button)
+            .height(Length::Fixed(30.0))
+            .padding(5);
+
+        let graphing_pane = Column::new()
+            .push(canvas)
+            .push(horizontal_divider_graph)
+            .push(graph_bottom_bar)
             .height(Length::Fill)
-            .center_x(Length::Fill);
+            .width(Length::Fill);
 
         let vertical_divider = Container::new(Space::with_width(Length::Fixed(1.0)))
             .height(Length::Fill)
