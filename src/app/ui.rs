@@ -2,6 +2,7 @@ use super::constants::APP_ICON;
 use super::constants::DEFAULT_APP_WINDOW_HEIGHT;
 use super::constants::DEFAULT_APP_WINDOW_WIDTH;
 use super::constants::DEFAUTL_APP_NAME;
+use super::constants::REPL_TEXT_INPUT_ID;
 use super::graph::Graph;
 use super::types::MyMathBoardMessage;
 use crate::repl::Repl;
@@ -36,18 +37,21 @@ use rfd::FileDialog;
 use std::fs::File;
 use std::io::{Read, Write};
 
+/// The fundamental data structure used to run the app.
 #[derive(Default)]
 pub struct MyMathBoardApp {
     repl: Repl,
     graph: Graph,
-    input: String,
-    output_history: Vec<String>,
-    focus_input: bool,
-    input_history: Vec<String>,
-    current_file_path: Option<String>,
+    repl_input: String,
+    repl_input_id: String,
+    repl_input_history: Vec<String>,
+    repl_output_history: Vec<String>,
+    repl_should_input_be_in_focus: bool,
+    current_open_file_path: Option<String>,
 }
 
 impl MyMathBoardApp {
+    /// Call this function to start the app
     pub fn start() -> iced::Result {
         application(
             DEFAUTL_APP_NAME,
@@ -72,6 +76,24 @@ impl MyMathBoardApp {
         .run_with(|| MyMathBoardApp::new())
     }
 
+    /// Get a new instance. You should prefer using the start() method.
+    pub fn new() -> (Self, Task<MyMathBoardMessage>) {
+        let app = MyMathBoardApp {
+            graph: Graph::default(),
+            repl: Repl::new(),
+            repl_input: String::new(),
+            repl_input_id: REPL_TEXT_INPUT_ID.to_string(),
+            repl_input_history: Vec::new(),
+            repl_output_history: Vec::new(),
+            repl_should_input_be_in_focus: true,
+            current_open_file_path: None,
+        };
+
+        let initial_task = text_input::focus(text_input::Id::new(app.repl_input_id.clone()));
+
+        (app, initial_task)
+    }
+
     pub fn update(&mut self, message: MyMathBoardMessage) -> Task<MyMathBoardMessage> {
         match message {
             MyMathBoardMessage::Dragged(delta) => {
@@ -84,64 +106,56 @@ impl MyMathBoardApp {
             }
             MyMathBoardMessage::StartDrag(position) => {
                 self.graph.is_dragging = true;
+
                 self.graph.last_cursor_position = Some(position);
+
                 Task::none()
             }
             MyMathBoardMessage::EndDrag => {
                 self.graph.is_dragging = false;
+
                 self.graph.last_cursor_position = None;
+
                 Task::none()
             }
             MyMathBoardMessage::ZoomIn => {
                 self.graph.cell_size = (self.graph.cell_size as f32 * 1.1).ceil() as u64;
+
                 Task::none()
             }
             MyMathBoardMessage::ZoomOut => {
                 self.graph.cell_size = (self.graph.cell_size as f32 * 0.9).ceil() as u64;
+
                 Task::none()
             }
             MyMathBoardMessage::DrawEquation(equation) => {
                 let node_formation = build_operator_tree(&equation);
+
                 if node_formation.is_ok() {
                     self.graph.equations.push(node_formation.unwrap());
                 }
+
                 Task::none()
             }
             MyMathBoardMessage::InputChanged(new_input) => {
-                self.input = new_input;
+                self.repl_input = new_input;
+
                 Task::none()
             }
             MyMathBoardMessage::InputSubmitted => {
-                self.input_history.push(self.input.clone());
-                if self.input.starts_with("draw(") && self.input.ends_with(")") {
-                    let equation = self
-                        .input
-                        .strip_prefix("draw(")
-                        .unwrap()
-                        .strip_suffix(")")
-                        .unwrap();
-                    println!("{:?}", equation);
-                    let node_formation = build_operator_tree(&equation);
-                    if node_formation.is_ok() {
-                        self.graph.equations.push(node_formation.unwrap());
-                    }
-                    // Clear input and set focus back to the input field
-                    self.output_history
-                        .push(format!(">>> {}\n=> {:?}", self.input, "draw"));
-                    self.input.clear();
-                    text_input::focus("1")
-                } else {
-                    // Process the input as usual if it doesn't match `draw(...)`
-                    let result = self.repl.process_input(&self.input);
-                    self.output_history
-                        .push(format!(">>> {}\n=> {:?}", self.input, result));
-                    self.input.clear();
-                    self.focus_input = true;
-                    text_input::focus("1")
-                }
+                self.repl_input_history.push(self.repl_input.clone());
+
+                self.process_repl_input();
+
+                self.repl_input.clear();
+
+                self.repl_should_input_be_in_focus = true;
+
+                text_input::focus(self.repl_input_id.clone())
             }
             MyMathBoardMessage::ClearRepl => {
-                self.output_history.clear();
+                self.repl_output_history.clear();
+
                 Task::none()
             }
             MyMathBoardMessage::ExportGraph => iced::window::get_latest()
@@ -160,7 +174,7 @@ impl MyMathBoardApp {
                 }),
             MyMathBoardMessage::SavePressed => {
                 // If a file is already opened, save directly to it
-                if let Some(path) = &self.current_file_path {
+                if let Some(path) = &self.current_open_file_path {
                     if let Err(e) = self.save_to_file(path) {
                         println!("Failed to save file: {}", e);
                     }
@@ -171,7 +185,7 @@ impl MyMathBoardApp {
                         .save_file()
                     {
                         let path_str = path.to_string_lossy().to_string();
-                        self.current_file_path = Some(path_str.clone());
+                        self.current_open_file_path = Some(path_str.clone());
                         if let Err(e) = self.save_to_file(&path_str) {
                             println!("Failed to save file: {}", e);
                         }
@@ -189,14 +203,14 @@ impl MyMathBoardApp {
                     if let Err(e) = self.load_from_file(&path_str) {
                         println!("Failed to load file: {}", e);
                     } else {
-                        self.current_file_path = Some(path_str);
-                        for command in &self.input_history {
+                        self.current_open_file_path = Some(path_str);
+                        for command in &self.repl_input_history {
                             let result = self.repl.process_input(command);
-                            self.output_history
+                            self.repl_output_history
                                 .push(format!(">>> {}\n=> {:?}", command, result));
                         }
                     }
-                    println!("{:?}", self.input_history);
+                    println!("{:?}", self.repl_input_history);
                 }
                 Task::none()
             }
@@ -207,13 +221,40 @@ impl MyMathBoardApp {
                     .save_file()
                 {
                     let path_str = path.to_string_lossy().to_string();
-                    self.current_file_path = Some(path_str.clone());
+                    self.current_open_file_path = Some(path_str.clone());
                     if let Err(e) = self.save_to_file(&path_str) {
                         println!("Failed to save file: {}", e);
                     }
                 }
                 Task::none()
             }
+        }
+    }
+
+    pub fn process_repl_input(&mut self) {
+        if self.repl_input.starts_with("draw(") && self.repl_input.ends_with(")") {
+            let equation = self
+                .repl_input
+                .strip_prefix("draw(")
+                .unwrap()
+                .strip_suffix(")")
+                .unwrap();
+
+            let result = "";
+
+            let node_formation = build_operator_tree(&equation);
+
+            if node_formation.is_ok() {
+                self.graph.equations.push(node_formation.unwrap());
+            }
+
+            self.repl_output_history
+                .push(format!(">>> {}\n=> {:?}", self.repl_input, result));
+        } else {
+            let result = self.repl.process_input(&self.repl_input);
+
+            self.repl_output_history
+                .push(format!(">>> {}\n=> {:?}", self.repl_input, result));
         }
     }
 
@@ -345,7 +386,7 @@ impl MyMathBoardApp {
             .height(Length::Fixed(30.0))
             .padding(5);
 
-        let mut repl_output = self.output_history.iter().fold(
+        let mut repl_output = self.repl_output_history.iter().fold(
             Column::new().spacing(5).width(Length::Fill),
             |column, entry| {
                 column.push(
@@ -361,7 +402,7 @@ impl MyMathBoardApp {
             Row::new()
                 .push(Text::new(">>> ").color(Color::WHITE).size(16)) // Add the prompt prefix
                 .push(
-                    TextInput::new("", &self.input)
+                    TextInput::new("", &self.repl_input)
                         .on_input(MyMathBoardMessage::InputChanged)
                         .on_submit(MyMathBoardMessage::InputSubmitted)
                         .padding(0)
@@ -408,40 +449,24 @@ impl MyMathBoardApp {
             .into()
     }
 
-    pub fn new() -> (Self, Task<MyMathBoardMessage>) {
-        let mut app = MyMathBoardApp {
-            input: String::new(),
-            output_history: Vec::new(),
-            focus_input: true,
-            graph: Graph::default(),
-            repl: Repl::new(),
-            input_history: Vec::new(),
-            current_file_path: None,
-        };
-
-        let text_input_id = text_input::Id::new("1");
-        app.focus_input = true;
-
-        let initial_task = text_input::focus(text_input_id.clone());
-
-        (app, initial_task)
-    }
-
     fn save_to_file(&self, file_path: &str) -> Result<(), std::io::Error> {
         let mut file = File::create(file_path)?;
-        println!("attempting to save: {:?}", self.input_history);
-        let encoded_data = bincode::serialize(&self.input_history).unwrap();
-        println!("encoded {:?}", encoded_data);
+
+        let encoded_data = bincode::serialize(&self.repl_input_history).unwrap_or_default();
+
         file.write_all(&encoded_data)?;
         Ok(())
     }
 
-    // Function to load state from a file
     fn load_from_file(&mut self, file_path: &str) -> Result<(), std::io::Error> {
         let mut file = File::open(file_path)?;
+
         let mut encoded_data = Vec::new();
+
         file.read_to_end(&mut encoded_data)?;
-        self.input_history = bincode::deserialize(&encoded_data).unwrap();
+
+        self.repl_input_history = bincode::deserialize(&encoded_data).unwrap_or_default();
+
         Ok(())
     }
 }

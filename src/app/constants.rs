@@ -6,3 +6,4 @@ pub const APP_ICON_SIZE: u32 = 64;
 pub const APP_ICON: &[u8] = include_bytes!("../../assets/logo_64.ico");
 pub const GRAPH_THICK_LINE_WIDTH: f32 = 2.0;
 pub const GRAPH_THIN_LINE_WIDTH: f32 = 1.0;
+pub const REPL_TEXT_INPUT_ID: &str = "1";
