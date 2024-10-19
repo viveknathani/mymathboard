@@ -8,6 +8,7 @@ use super::graph::Graph;
 use super::types::MyMathBoardMessage;
 use super::types::OutputHistoryItem;
 use super::types::OutputHistoryItemType;
+use super::utils::get_board_name;
 use crate::repl::Repl;
 use evalexpr::build_operator_tree;
 use iced::application;
@@ -15,7 +16,6 @@ use iced::widget::button;
 use iced::widget::canvas;
 use iced::widget::container;
 use iced::widget::container::Style;
-use iced::widget::scrollable;
 use iced::widget::text_input;
 use iced::widget::Button;
 use iced::widget::Column;
@@ -39,7 +39,6 @@ use iced::Task;
 use image::ImageFormat;
 use image::RgbaImage;
 use rfd::FileDialog;
-use std::fmt::format;
 use std::fs::File;
 use std::io::{Read, Write};
 
@@ -54,6 +53,7 @@ pub struct MyMathBoardApp {
     repl_output_history: Vec<OutputHistoryItem>,
     repl_should_input_be_in_focus: bool,
     current_open_file_path: Option<String>,
+    board_has_unsaved_changes: bool,
 }
 
 impl MyMathBoardApp {
@@ -93,6 +93,7 @@ impl MyMathBoardApp {
             repl_output_history: Vec::new(),
             repl_should_input_be_in_focus: true,
             current_open_file_path: None,
+            board_has_unsaved_changes: false,
         };
 
         let initial_task = text_input::focus(text_input::Id::new(app.repl_input_id.clone()));
@@ -149,6 +150,10 @@ impl MyMathBoardApp {
                 Task::none()
             }
             MyMathBoardMessage::InputSubmitted => {
+                if self.current_open_file_path.is_some() {
+                    self.board_has_unsaved_changes = true;
+                }
+
                 self.repl_input_history.push(self.repl_input.clone());
 
                 self.process_repl_input();
@@ -160,6 +165,11 @@ impl MyMathBoardApp {
                 text_input::focus(self.repl_input_id.clone())
             }
             MyMathBoardMessage::ClearRepl => {
+                if self.current_open_file_path.is_some() {
+                    self.board_has_unsaved_changes = true;
+                }
+
+                self.repl_input_history.clear();
                 self.repl_output_history.clear();
 
                 Task::none()
@@ -179,64 +189,49 @@ impl MyMathBoardApp {
                     Task::none()
                 }),
             MyMathBoardMessage::SavePressed => {
-                // If a file is already opened, save directly to it
                 if let Some(path) = &self.current_open_file_path {
-                    if let Err(e) = self.save_to_file(path) {
-                        println!("Failed to save file: {}", e);
-                    }
-                } else {
-                    // Otherwise, prompt user to choose a file
-                    if let Some(path) = FileDialog::new()
-                        .add_filter("MyMathBoard", &["mymathboard"])
-                        .save_file()
-                    {
-                        let path_str = path.to_string_lossy().to_string();
-                        self.current_open_file_path = Some(path_str.clone());
-                        if let Err(e) = self.save_to_file(&path_str) {
-                            println!("Failed to save file: {}", e);
-                        }
-                    }
+                    let _ = self.save_to_file(path);
+                } else if let Some(path) = FileDialog::new()
+                    .add_filter("MyMathBoard", &["mymathboard"])
+                    .save_file()
+                {
+                    let path_str = path.to_string_lossy().to_string();
+                    self.current_open_file_path = Some(path_str.clone());
+                    let _ = self.save_to_file(&path_str);
                 }
+
+                self.board_has_unsaved_changes = false;
                 Task::none()
             }
             MyMathBoardMessage::OpenPressed => {
-                // Open a file dialog to load a file
                 if let Some(path) = FileDialog::new()
                     .add_filter("MyMathBoard", &["mymathboard"])
                     .pick_file()
                 {
                     let path_str = path.to_string_lossy().to_string();
+
+                    self.repl_input.clear();
+                    self.repl_input_history.clear();
+                    self.repl_output_history.clear();
+
                     if self.load_from_file(&path_str).is_ok() {
                         self.current_open_file_path = Some(path_str);
-                        for command in &self.repl_input_history {
-                            let result = self.repl.process_input(command);
-
-                            self.repl_output_history.push(OutputHistoryItem {
-                                value: format!(">>> {}\n", command),
-                                kind: OutputHistoryItemType::PreviousInput,
-                            });
-
-                            self.repl_output_history.push(OutputHistoryItem {
-                                value: format!("=> {:?}\n", result),
-                                kind: OutputHistoryItemType::OkOutput,
-                            });
+                        for command in &self.repl_input_history.clone() {
+                            self.repl_input = command.clone();
+                            self.process_repl_input();
                         }
                     }
-                    println!("{:?}", self.repl_input_history);
                 }
                 Task::none()
             }
             MyMathBoardMessage::SaveAsPressed => {
-                // Always prompt for a new file path to save
                 if let Some(path) = FileDialog::new()
                     .add_filter("MyMathBoard", &["mymathboard"])
                     .save_file()
                 {
                     let path_str = path.to_string_lossy().to_string();
                     self.current_open_file_path = Some(path_str.clone());
-                    if let Err(e) = self.save_to_file(&path_str) {
-                        println!("Failed to save file: {}", e);
-                    }
+                    let _ = self.save_to_file(&path_str);
                 }
                 Task::none()
             }
@@ -288,29 +283,59 @@ impl MyMathBoardApp {
     }
 
     pub fn view(&self) -> Element<MyMathBoardMessage> {
-        let save_button = Button::new(Text::new("Save")).on_press(MyMathBoardMessage::SavePressed);
-
-        let open_button = Button::new(Text::new("Open")).on_press(MyMathBoardMessage::OpenPressed);
-
-        let save_as_button =
-            Button::new(Text::new("Save As")).on_press(MyMathBoardMessage::SaveAsPressed);
-
+        // CONTROL BAR
+        let open_button = Button::new(Text::new("OPEN").size(14))
+            .on_press(MyMathBoardMessage::OpenPressed)
+            .height(25)
+            .padding(2)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(Color::from_rgb8(52, 134, 235))),
+                border: Border::default(),
+                text_color: Color::WHITE,
+                ..Default::default()
+            });
+        let save_button = Button::new(Text::new("SAVE").size(14))
+            .on_press(MyMathBoardMessage::SavePressed)
+            .height(25)
+            .padding(2)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(Color::from_rgb8(52, 134, 235))),
+                border: Border::default(),
+                text_color: Color::WHITE,
+                ..Default::default()
+            });
+        let save_as_button = Button::new(Text::new("SAVE AS").size(14))
+            .on_press(MyMathBoardMessage::SaveAsPressed)
+            .height(25)
+            .padding(2)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(Color::from_rgb8(52, 134, 235))),
+                border: Border::default(),
+                text_color: Color::WHITE,
+                ..Default::default()
+            });
         let control_bar = Row::new()
+            .push(Space::with_width(Length::Fixed(10.0)))
             .push(
-                Text::new("vivek's board")
-                    .color(Color::WHITE)
-                    .font(Font::MONOSPACE),
+                Text::new(get_board_name(
+                    self.current_open_file_path.clone(),
+                    self.board_has_unsaved_changes,
+                ))
+                .color(Color::WHITE)
+                .font(Font::MONOSPACE),
             )
             .push(Space::with_width(Length::Fill))
-            .push(save_button)
-            .push(Space::with_width(Length::Fill))
             .push(open_button)
-            .push(Space::with_width(Length::Fill))
+            .push(Space::with_width(Length::Fixed(10.0)))
+            .push(save_button)
+            .push(Space::with_width(Length::Fixed(10.0)))
             .push(save_as_button)
-            .height(Length::FillPortion(3))
+            .push(Space::with_width(Length::Fixed(10.0)))
+            .height(Length::FillPortion(4))
             .width(Length::Fill);
 
-        let horizontal_divider_up = Container::new(Space::with_height(Length::Fixed(1.0)))
+        // DIVIDER
+        let horizontal_divider_top = Container::new(Space::with_height(Length::Fixed(1.0)))
             .width(Length::Fill)
             .style(|_theme| container::Style {
                 background: Some(Background::Color(Color::WHITE)),
@@ -405,6 +430,7 @@ impl MyMathBoardApp {
                 text_color: Color::WHITE,
                 ..Default::default()
             })
+            .height(25)
             .padding(2);
 
         let bottom_bar = Row::new()
@@ -494,8 +520,9 @@ impl MyMathBoardApp {
         });
 
         let content = Column::new()
+            .push(Space::with_height(Length::Fixed(2.0)))
             .push(control_bar)
-            .push(horizontal_divider_up)
+            .push(horizontal_divider_top)
             .push(
                 Container::new(
                     Row::new()

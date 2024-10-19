@@ -1,5 +1,3 @@
-use iced::Color;
-
 pub const DEFAULT_APP_WINDOW_WIDTH: f32 = 800.0;
 pub const DEFAULT_APP_WINDOW_HEIGHT: f32 = 600.0;
 pub const DEFAUTL_APP_NAME: &str = "mymathboard";
