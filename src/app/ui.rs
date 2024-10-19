@@ -1,9 +1,15 @@
 use std::fs::File;
 
+use super::constants::APP_ICON;
+use super::constants::APP_ICON_SIZE;
+use super::constants::DEFAULT_APP_WINDOW_HEIGHT;
+use super::constants::DEFAULT_APP_WINDOW_WIDTH;
+use super::constants::DEFAUTL_APP_NAME;
 use super::graph::Graph;
 use super::types::MyMathBoardMessage;
 use crate::repl::Repl;
 use evalexpr::build_operator_tree;
+use iced::application;
 use iced::widget::button;
 use iced::widget::canvas;
 use iced::widget::container;
@@ -17,15 +23,18 @@ use iced::widget::Scrollable;
 use iced::widget::Space;
 use iced::widget::Text;
 use iced::widget::TextInput;
+use iced::window;
+use iced::window::Settings;
 use iced::Background;
 use iced::Border;
 use iced::Color;
 use iced::Element;
 use iced::Length;
 use iced::Point;
+use iced::Size;
 use iced::Task;
+use image::ImageFormat;
 use image::RgbaImage;
-use regex::Regex;
 use rfd::FileDialog;
 use std::io::{Read, Write};
 
@@ -41,6 +50,30 @@ pub struct MyMathBoardApp {
 }
 
 impl MyMathBoardApp {
+    pub fn start() -> iced::Result {
+        application(
+            DEFAUTL_APP_NAME,
+            MyMathBoardApp::update,
+            MyMathBoardApp::view,
+        )
+        .window(Settings {
+            size: Size {
+                height: DEFAULT_APP_WINDOW_HEIGHT,
+                width: DEFAULT_APP_WINDOW_WIDTH,
+            },
+            position: window::Position::Centered,
+            min_size: None,
+            max_size: None,
+            visible: true,
+            decorations: true,
+            transparent: false,
+            level: window::Level::Normal,
+            icon: Some(window::icon::from_file_data(APP_ICON, Some(ImageFormat::Ico)).unwrap()),
+            ..Settings::default()
+        })
+        .run_with(|| MyMathBoardApp::new())
+    }
+
     pub fn update(&mut self, message: MyMathBoardMessage) -> Task<MyMathBoardMessage> {
         match message {
             MyMathBoardMessage::Dragged(delta) => {
