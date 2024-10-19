@@ -23,6 +23,7 @@ use iced::Length;
 use iced::Point;
 use iced::Task;
 use image::RgbaImage;
+use regex::Regex;
 use rfd::FileDialog;
 
 #[derive(Default)]
@@ -75,12 +76,32 @@ impl MyMathBoardApp {
                 Task::none()
             }
             MyMathBoardMessage::InputSubmitted => {
-                let result = self.repl.process_input(&self.input);
-                self.output_history
-                    .push(format!(">>> {}\n=> {:?}", self.input, result));
-                self.input.clear();
-                self.focus_input = true;
-                text_input::focus("1")
+                if self.input.starts_with("draw(") && self.input.ends_with(")") {
+                    let equation = self
+                        .input
+                        .strip_prefix("draw(")
+                        .unwrap()
+                        .strip_suffix(")")
+                        .unwrap();
+                    println!("{:?}", equation);
+                    let node_formation = build_operator_tree(&equation);
+                    if node_formation.is_ok() {
+                        self.graph.equations.push(node_formation.unwrap());
+                    }
+                    // Clear input and set focus back to the input field
+                    self.output_history
+                        .push(format!(">>> {}\n=> {:?}", self.input, "draw"));
+                    self.input.clear();
+                    text_input::focus("1")
+                } else {
+                    // Process the input as usual if it doesn't match `draw(...)`
+                    let result = self.repl.process_input(&self.input);
+                    self.output_history
+                        .push(format!(">>> {}\n=> {:?}", self.input, result));
+                    self.input.clear();
+                    self.focus_input = true;
+                    text_input::focus("1")
+                }
             }
             MyMathBoardMessage::ClearRepl => {
                 self.output_history.clear();
