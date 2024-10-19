@@ -2,9 +2,11 @@ use super::graph::Graph;
 use super::types::MyMathBoardMessage;
 use crate::repl::Repl;
 use evalexpr::build_operator_tree;
+use iced::widget::button;
 use iced::widget::container;
 use iced::widget::container::Style;
 use iced::widget::text_input;
+use iced::widget::Button;
 use iced::widget::Column;
 use iced::widget::Container;
 use iced::widget::Row;
@@ -13,6 +15,7 @@ use iced::widget::Space;
 use iced::widget::Text;
 use iced::widget::TextInput;
 use iced::Background;
+use iced::Border;
 use iced::Color;
 use iced::Element;
 use iced::Length;
@@ -76,6 +79,10 @@ impl MyMathBoardApp {
                 self.focus_input = true;
                 text_input::focus("1")
             }
+            MyMathBoardMessage::ClearRepl => {
+                self.output_history.clear();
+                Task::none()
+            }
         }
     }
 
@@ -84,7 +91,14 @@ impl MyMathBoardApp {
             .height(Length::FillPortion(3))
             .width(Length::Fill);
 
-        let horizontal_divider = Container::new(Space::with_height(Length::Fixed(1.0)))
+        let horizontal_divider_up = Container::new(Space::with_height(Length::Fixed(1.0)))
+            .width(Length::Fill)
+            .style(|_theme| container::Style {
+                background: Some(Background::Color(Color::WHITE)),
+                ..Default::default()
+            });
+
+        let horizontal_divider_repl = Container::new(Space::with_height(Length::Fixed(1.0)))
             .width(Length::Fill)
             .style(|_theme| container::Style {
                 background: Some(Background::Color(Color::WHITE)),
@@ -102,6 +116,22 @@ impl MyMathBoardApp {
                 background: Some(Background::Color(Color::WHITE)),
                 ..Default::default()
             });
+
+        let clear_button = Button::new(Text::new("Clear").color(Color::WHITE).size(16))
+            .padding(5)
+            .on_press(MyMathBoardMessage::ClearRepl)
+            .style(|_theme, _status| button::Style {
+                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                border: Border::default(),
+                text_color: Color::WHITE,
+                ..Default::default()
+            });
+
+        let bottom_bar = Row::new()
+            .push(Space::with_width(Length::Fill))
+            .push(clear_button)
+            .height(Length::Fixed(30.0))
+            .padding(5);
 
         let mut repl_output = self.output_history.iter().fold(
             Column::new().spacing(5).width(Length::Fill),
@@ -130,13 +160,20 @@ impl MyMathBoardApp {
                 ),
         );
 
-        let repl_pane = Scrollable::new(repl_output)
+        let repl_pane = Column::new()
+            .push(
+                Scrollable::new(repl_output)
+                    .height(Length::Fill)
+                    .width(Length::Fill),
+            )
+            .push(horizontal_divider_repl)
+            .push(bottom_bar)
             .height(Length::Fill)
             .width(Length::Fill);
 
         let content = Column::new()
             .push(control_bar)
-            .push(horizontal_divider)
+            .push(horizontal_divider_up)
             .push(
                 Container::new(
                     Row::new()

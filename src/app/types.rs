@@ -11,4 +11,5 @@ pub enum MyMathBoardMessage {
     DrawEquation(String),
     InputChanged(String),
     InputSubmitted,
+    ClearRepl,
 }
