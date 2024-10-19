@@ -12,4 +12,5 @@ pub enum MyMathBoardMessage {
     InputChanged(String),
     InputSubmitted,
     ClearRepl,
+    ExportGraph,
 }

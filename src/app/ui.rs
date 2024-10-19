@@ -22,6 +22,8 @@ use iced::Element;
 use iced::Length;
 use iced::Point;
 use iced::Task;
+use image::RgbaImage;
+use rfd::FileDialog;
 
 #[derive(Default)]
 pub struct MyMathBoardApp {
@@ -84,6 +86,20 @@ impl MyMathBoardApp {
                 self.output_history.clear();
                 Task::none()
             }
+            MyMathBoardMessage::ExportGraph => iced::window::get_latest()
+                .and_then(move |window| iced::window::screenshot(window))
+                .then(move |screenshot| {
+                    if let Some(path) = FileDialog::new().add_filter("png", &["png"]).save_file() {
+                        let png = RgbaImage::from_raw(
+                            screenshot.size.width,
+                            screenshot.size.height,
+                            screenshot.bytes.to_vec(),
+                        )
+                        .unwrap();
+                        png.save_with_format(path, image::ImageFormat::Png).unwrap();
+                    }
+                    Task::none()
+                }),
         }
     }
 
@@ -152,6 +168,7 @@ impl MyMathBoardApp {
 
         let graph_clear_button = Button::new(Text::new("Clear").color(Color::WHITE).size(16))
             .padding(5)
+            .on_press(MyMathBoardMessage::ExportGraph)
             .style(|_theme, _status| button::Style {
                 background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
                 ..Default::default()

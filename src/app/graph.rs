@@ -5,8 +5,12 @@ use iced::event;
 use iced::mouse;
 use iced::widget::canvas;
 use iced::widget::canvas::Event;
+use iced::widget::canvas::Frame;
+use iced::widget::canvas::Image;
 use iced::widget::canvas::Stroke;
 use iced::widget::canvas::Text;
+use iced::window;
+use iced::window::Id;
 use iced::Color;
 use iced::Point;
 use iced::Rectangle;
@@ -14,6 +18,7 @@ use iced::Renderer;
 use iced::Size;
 use iced::Theme;
 use iced::Vector;
+use image::RgbaImage;
 
 /// The fundamental data structure used to draw a 2D graph on the screen.
 #[derive(Debug, Clone)]
