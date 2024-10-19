@@ -1,7 +1,4 @@
-use std::fs::File;
-
 use super::constants::APP_ICON;
-use super::constants::APP_ICON_SIZE;
 use super::constants::DEFAULT_APP_WINDOW_HEIGHT;
 use super::constants::DEFAULT_APP_WINDOW_WIDTH;
 use super::constants::DEFAUTL_APP_NAME;
@@ -36,6 +33,7 @@ use iced::Task;
 use image::ImageFormat;
 use image::RgbaImage;
 use rfd::FileDialog;
+use std::fs::File;
 use std::io::{Read, Write};
 
 #[derive(Default)]

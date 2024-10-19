@@ -1,3 +1,6 @@
+use super::constants::DEFAULT_CELL_SIZE;
+use super::constants::GRAPH_THICK_LINE_WIDTH;
+use super::constants::GRAPH_THIN_LINE_WIDTH;
 use super::types::MyMathBoardMessage;
 use evalexpr::context_map;
 use evalexpr::Node;
@@ -5,12 +8,8 @@ use iced::event;
 use iced::mouse;
 use iced::widget::canvas;
 use iced::widget::canvas::Event;
-use iced::widget::canvas::Frame;
-use iced::widget::canvas::Image;
 use iced::widget::canvas::Stroke;
 use iced::widget::canvas::Text;
-use iced::window;
-use iced::window::Id;
 use iced::Color;
 use iced::Point;
 use iced::Rectangle;
@@ -18,7 +17,6 @@ use iced::Renderer;
 use iced::Size;
 use iced::Theme;
 use iced::Vector;
-use image::RgbaImage;
 
 /// The fundamental data structure used to draw a 2D graph on the screen.
 #[derive(Debug, Clone)]
@@ -33,7 +31,7 @@ pub struct Graph {
 impl Default for Graph {
     fn default() -> Self {
         Graph {
-            cell_size: 100,
+            cell_size: DEFAULT_CELL_SIZE,
             is_dragging: false,
             viewport_offset: Vector::new(0.0, 0.0),
             last_cursor_position: None,
@@ -55,9 +53,6 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
     ) -> Vec<canvas::Geometry> {
         // Get a new frame.
         let mut frame = canvas::Frame::new(renderer, bounds.size());
-
-        let thick_line_width = 2.0;
-        let light_line_width = 1.0;
 
         // Prepare the cell. Our cell is a square.
         let cell_size = Size {
@@ -101,7 +96,7 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                     frame.stroke(
                         &line,
                         Stroke::default()
-                            .with_width(light_line_width)
+                            .with_width(GRAPH_THIN_LINE_WIDTH)
                             .with_color(Color::from_rgb(
                                 200.0 / 255.0,
                                 200.0 / 255.0,
@@ -147,7 +142,6 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
         let middle_y = bounds.height / 2.0 - self.viewport_offset.y;
 
         let font_size = iced::Pixels(14.0);
-        let font_color = Color::WHITE;
 
         for x in start_x..end_x {
             let screen_x = (x * self.cell_size as isize) as f32 - self.viewport_offset.x;
@@ -157,7 +151,7 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                 frame.fill_text(Text {
                     content: number.clone(),
                     position: Point::new(screen_x, middle_y + font_size.0),
-                    color: font_color,
+                    color: Color::WHITE,
                     size: font_size,
                     font: iced::Font::default(),
                     ..Default::default()
@@ -173,7 +167,7 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                 frame.fill_text(Text {
                     content: number.clone(),
                     position: Point::new(middle_x + font_size.0, screen_y),
-                    color: font_color,
+                    color: Color::WHITE,
                     size: font_size,
                     font: iced::Font::default(),
                     ..Default::default()
@@ -190,13 +184,13 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
         frame.stroke(
             &vertical_axis,
             Stroke::default()
-                .with_width(thick_line_width)
+                .with_width(GRAPH_THICK_LINE_WIDTH)
                 .with_color(Color::WHITE),
         );
         frame.stroke(
             &horizontal_axis,
             Stroke::default()
-                .with_width(thick_line_width)
+                .with_width(GRAPH_THICK_LINE_WIDTH)
                 .with_color(Color::WHITE),
         );
 
