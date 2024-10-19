@@ -13,4 +13,7 @@ pub enum MyMathBoardMessage {
     InputSubmitted,
     ClearRepl,
     ExportGraph,
+    SavePressed,
+    OpenPressed,
+    SaveAsPressed,
 }

@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use super::graph::Graph;
 use super::types::MyMathBoardMessage;
 use crate::repl::Repl;
@@ -25,6 +27,7 @@ use iced::Task;
 use image::RgbaImage;
 use regex::Regex;
 use rfd::FileDialog;
+use std::io::{Read, Write};
 
 #[derive(Default)]
 pub struct MyMathBoardApp {
@@ -33,6 +36,8 @@ pub struct MyMathBoardApp {
     input: String,
     output_history: Vec<String>,
     focus_input: bool,
+    input_history: Vec<String>,
+    current_file_path: Option<String>,
 }
 
 impl MyMathBoardApp {
@@ -76,6 +81,7 @@ impl MyMathBoardApp {
                 Task::none()
             }
             MyMathBoardMessage::InputSubmitted => {
+                self.input_history.push(self.input.clone());
                 if self.input.starts_with("draw(") && self.input.ends_with(")") {
                     let equation = self
                         .input
@@ -121,11 +127,81 @@ impl MyMathBoardApp {
                     }
                     Task::none()
                 }),
+            MyMathBoardMessage::SavePressed => {
+                // If a file is already opened, save directly to it
+                if let Some(path) = &self.current_file_path {
+                    if let Err(e) = self.save_to_file(path) {
+                        println!("Failed to save file: {}", e);
+                    }
+                } else {
+                    // Otherwise, prompt user to choose a file
+                    if let Some(path) = FileDialog::new()
+                        .add_filter("MyMathBoard", &["mymathboard"])
+                        .save_file()
+                    {
+                        let path_str = path.to_string_lossy().to_string();
+                        self.current_file_path = Some(path_str.clone());
+                        if let Err(e) = self.save_to_file(&path_str) {
+                            println!("Failed to save file: {}", e);
+                        }
+                    }
+                }
+                Task::none()
+            }
+            MyMathBoardMessage::OpenPressed => {
+                // Open a file dialog to load a file
+                if let Some(path) = FileDialog::new()
+                    .add_filter("MyMathBoard", &["mymathboard"])
+                    .pick_file()
+                {
+                    let path_str = path.to_string_lossy().to_string();
+                    if let Err(e) = self.load_from_file(&path_str) {
+                        println!("Failed to load file: {}", e);
+                    } else {
+                        self.current_file_path = Some(path_str);
+                        for command in &self.input_history {
+                            let result = self.repl.process_input(command);
+                            self.output_history
+                                .push(format!(">>> {}\n=> {:?}", command, result));
+                        }
+                    }
+                    println!("{:?}", self.input_history);
+                }
+                Task::none()
+            }
+            MyMathBoardMessage::SaveAsPressed => {
+                // Always prompt for a new file path to save
+                if let Some(path) = FileDialog::new()
+                    .add_filter("MyMathBoard", &["mymathboard"])
+                    .save_file()
+                {
+                    let path_str = path.to_string_lossy().to_string();
+                    self.current_file_path = Some(path_str.clone());
+                    if let Err(e) = self.save_to_file(&path_str) {
+                        println!("Failed to save file: {}", e);
+                    }
+                }
+                Task::none()
+            }
         }
     }
 
     pub fn view(&self) -> Element<MyMathBoardMessage> {
-        let control_bar = Container::new(Text::new("vivek's board").color(Color::WHITE))
+        let save_button = Button::new(Text::new("Save")).on_press(MyMathBoardMessage::SavePressed);
+
+        let open_button = Button::new(Text::new("Open")).on_press(MyMathBoardMessage::OpenPressed);
+
+        let save_as_button =
+            Button::new(Text::new("Save As")).on_press(MyMathBoardMessage::SaveAsPressed);
+
+        let control_bar = Row::new()
+            .push(Text::new("vivek's board").color(Color::WHITE))
+            .push(Space::with_width(Length::Fill))
+            .push(save_button)
+            .push(Space::with_width(Length::Fill))
+            .push(open_button)
+            .push(Space::with_width(Length::Fill))
+            .push(save_as_button)
             .height(Length::FillPortion(3))
             .width(Length::Fill);
 
@@ -308,6 +384,8 @@ impl MyMathBoardApp {
             focus_input: true,
             graph: Graph::default(),
             repl: Repl::new(),
+            input_history: Vec::new(),
+            current_file_path: None,
         };
 
         let text_input_id = text_input::Id::new("1");
@@ -316,6 +394,24 @@ impl MyMathBoardApp {
         let initial_task = text_input::focus(text_input_id.clone());
 
         (app, initial_task)
+    }
+
+    fn save_to_file(&self, file_path: &str) -> Result<(), std::io::Error> {
+        let mut file = File::create(file_path)?;
+        println!("attempting to save: {:?}", self.input_history);
+        let encoded_data = bincode::serialize(&self.input_history).unwrap();
+        println!("encoded {:?}", encoded_data);
+        file.write_all(&encoded_data)?;
+        Ok(())
+    }
+
+    // Function to load state from a file
+    fn load_from_file(&mut self, file_path: &str) -> Result<(), std::io::Error> {
+        let mut file = File::open(file_path)?;
+        let mut encoded_data = Vec::new();
+        file.read_to_end(&mut encoded_data)?;
+        self.input_history = bincode::deserialize(&encoded_data).unwrap();
+        Ok(())
     }
 }
 
