@@ -2,9 +2,12 @@ use super::constants::APP_ICON;
 use super::constants::DEFAULT_APP_WINDOW_HEIGHT;
 use super::constants::DEFAULT_APP_WINDOW_WIDTH;
 use super::constants::DEFAUTL_APP_NAME;
+use super::constants::REPL_BACKGROUND_COLOR;
 use super::constants::REPL_TEXT_INPUT_ID;
 use super::graph::Graph;
 use super::types::MyMathBoardMessage;
+use super::types::OutputHistoryItem;
+use super::types::OutputHistoryItemType;
 use crate::repl::Repl;
 use evalexpr::build_operator_tree;
 use iced::application;
@@ -12,6 +15,7 @@ use iced::widget::button;
 use iced::widget::canvas;
 use iced::widget::container;
 use iced::widget::container::Style;
+use iced::widget::scrollable;
 use iced::widget::text_input;
 use iced::widget::Button;
 use iced::widget::Column;
@@ -27,6 +31,7 @@ use iced::Background;
 use iced::Border;
 use iced::Color;
 use iced::Element;
+use iced::Font;
 use iced::Length;
 use iced::Point;
 use iced::Size;
@@ -34,6 +39,7 @@ use iced::Task;
 use image::ImageFormat;
 use image::RgbaImage;
 use rfd::FileDialog;
+use std::fmt::format;
 use std::fs::File;
 use std::io::{Read, Write};
 
@@ -45,7 +51,7 @@ pub struct MyMathBoardApp {
     repl_input: String,
     repl_input_id: String,
     repl_input_history: Vec<String>,
-    repl_output_history: Vec<String>,
+    repl_output_history: Vec<OutputHistoryItem>,
     repl_should_input_be_in_focus: bool,
     current_open_file_path: Option<String>,
 }
@@ -200,14 +206,20 @@ impl MyMathBoardApp {
                     .pick_file()
                 {
                     let path_str = path.to_string_lossy().to_string();
-                    if let Err(e) = self.load_from_file(&path_str) {
-                        println!("Failed to load file: {}", e);
-                    } else {
+                    if self.load_from_file(&path_str).is_ok() {
                         self.current_open_file_path = Some(path_str);
                         for command in &self.repl_input_history {
                             let result = self.repl.process_input(command);
-                            self.repl_output_history
-                                .push(format!(">>> {}\n=> {:?}", command, result));
+
+                            self.repl_output_history.push(OutputHistoryItem {
+                                value: format!(">>> {}\n", command),
+                                kind: OutputHistoryItemType::PreviousInput,
+                            });
+
+                            self.repl_output_history.push(OutputHistoryItem {
+                                value: format!("=> {:?}\n", result),
+                                kind: OutputHistoryItemType::OkOutput,
+                            });
                         }
                     }
                     println!("{:?}", self.repl_input_history);
@@ -248,13 +260,30 @@ impl MyMathBoardApp {
                 self.graph.equations.push(node_formation.unwrap());
             }
 
-            self.repl_output_history
-                .push(format!(">>> {}\n=> {:?}", self.repl_input, result));
+            self.repl_output_history.push(OutputHistoryItem {
+                value: format!(">>> {}\n", self.repl_input),
+                kind: OutputHistoryItemType::PreviousInput,
+            });
+
+            self.repl_output_history.push(OutputHistoryItem {
+                value: format!("=> {:?}\n", result),
+                kind: OutputHistoryItemType::OkOutput,
+            });
         } else {
             let result = self.repl.process_input(&self.repl_input);
 
-            self.repl_output_history
-                .push(format!(">>> {}\n=> {:?}", self.repl_input, result));
+            self.repl_output_history.push(OutputHistoryItem {
+                value: format!(">>> {}\n", self.repl_input),
+                kind: OutputHistoryItemType::PreviousInput,
+            });
+
+            self.repl_output_history.push(OutputHistoryItem {
+                value: format!("=> {:?}\n", result),
+                kind: match result {
+                    Ok(_) => OutputHistoryItemType::OkOutput,
+                    Err(_) => OutputHistoryItemType::ErrOutput,
+                },
+            });
         }
     }
 
@@ -267,7 +296,11 @@ impl MyMathBoardApp {
             Button::new(Text::new("Save As")).on_press(MyMathBoardMessage::SaveAsPressed);
 
         let control_bar = Row::new()
-            .push(Text::new("vivek's board").color(Color::WHITE))
+            .push(
+                Text::new("vivek's board")
+                    .color(Color::WHITE)
+                    .font(Font::MONOSPACE),
+            )
             .push(Space::with_width(Length::Fill))
             .push(save_button)
             .push(Space::with_width(Length::Fill))
@@ -329,12 +362,6 @@ impl MyMathBoardApp {
                 ..Default::default()
             });
 
-        // let zoom_controls = Row::new()
-        //     .push(zoom_in_button)
-        //     .push(zoom_reset_button)
-        //     .push(zoom_out_button)
-        //     .spacing(10);
-
         let graph_clear_button = Button::new(Text::new("Clear").color(Color::WHITE).size(16))
             .padding(5)
             .on_press(MyMathBoardMessage::ExportGraph)
@@ -370,15 +397,15 @@ impl MyMathBoardApp {
                 ..Default::default()
             });
 
-        let clear_button = Button::new(Text::new("Clear").color(Color::WHITE).size(16))
-            .padding(5)
+        let clear_button = Button::new(Text::new("CLEAR").color(Color::WHITE).size(14))
             .on_press(MyMathBoardMessage::ClearRepl)
             .style(|_theme, _status| button::Style {
-                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                background: Some(Background::Color(Color::from_rgb8(52, 134, 235))),
                 border: Border::default(),
                 text_color: Color::WHITE,
                 ..Default::default()
-            });
+            })
+            .padding(2);
 
         let bottom_bar = Row::new()
             .push(Space::with_width(Length::Fill))
@@ -390,8 +417,18 @@ impl MyMathBoardApp {
             Column::new().spacing(5).width(Length::Fill),
             |column, entry| {
                 column.push(
-                    Container::new(Text::new(entry).color(Color::WHITE).size(16))
-                        .width(Length::Fill),
+                    Container::new(
+                        Text::new(&entry.value)
+                            .color(match entry.kind {
+                                OutputHistoryItemType::PreviousInput => Color::from_rgb8(0, 200, 0),
+                                OutputHistoryItemType::ErrOutput => Color::from_rgb8(255, 0, 0),
+                                OutputHistoryItemType::OkOutput => Color::from_rgb8(255, 255, 255),
+                            })
+                            .size(16)
+                            .font(Font::MONOSPACE),
+                    )
+                    .padding(2)
+                    .width(Length::Fill),
                 )
             },
         );
@@ -400,7 +437,15 @@ impl MyMathBoardApp {
 
         repl_output = repl_output.push(
             Row::new()
-                .push(Text::new(">>> ").color(Color::WHITE).size(16)) // Add the prompt prefix
+                .push(
+                    Container::new(
+                        Text::new(">>> ")
+                            .color(Color::from_rgb8(0, 200, 0))
+                            .size(16)
+                            .font(Font::MONOSPACE),
+                    )
+                    .padding(2),
+                )
                 .push(
                     TextInput::new("", &self.repl_input)
                         .on_input(MyMathBoardMessage::InputChanged)
@@ -409,20 +454,44 @@ impl MyMathBoardApp {
                         .size(16)
                         .width(Length::Fill)
                         .id(text_input_id.clone())
-                        .style(|_, _| custom_text_input_style()),
+                        .style(|_, _| text_input::Style {
+                            background: Background::Color(Color::from_rgb8(
+                                REPL_BACKGROUND_COLOR.0,
+                                REPL_BACKGROUND_COLOR.1,
+                                REPL_BACKGROUND_COLOR.2,
+                            )),
+                            border: iced::Border::default(),
+                            icon: Color::WHITE,
+                            placeholder: Color::WHITE,
+                            value: Color::from_rgb8(0, 200, 0),
+                            selection: Color::from_rgb(0.3, 0.3, 0.3),
+                        })
+                        .font(Font::MONOSPACE),
                 ),
         );
 
-        let repl_pane = Column::new()
-            .push(
-                Scrollable::new(repl_output)
-                    .height(Length::Fill)
-                    .width(Length::Fill),
-            )
-            .push(horizontal_divider_repl)
-            .push(bottom_bar)
-            .height(Length::Fill)
-            .width(Length::Fill);
+        let repl_pane = Container::new(
+            Column::new()
+                .push(
+                    Scrollable::new(repl_output)
+                        .height(Length::Fill)
+                        .width(Length::Fill),
+                )
+                .push(horizontal_divider_repl)
+                .push(bottom_bar)
+                .height(Length::Fill)
+                .width(Length::Fill),
+        )
+        .height(Length::Fill)
+        .width(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Background::Color(Color::from_rgb8(
+                REPL_BACKGROUND_COLOR.0,
+                REPL_BACKGROUND_COLOR.1,
+                REPL_BACKGROUND_COLOR.2,
+            ))),
+            ..Default::default()
+        });
 
         let content = Column::new()
             .push(control_bar)
@@ -468,16 +537,5 @@ impl MyMathBoardApp {
         self.repl_input_history = bincode::deserialize(&encoded_data).unwrap_or_default();
 
         Ok(())
-    }
-}
-
-fn custom_text_input_style() -> text_input::Style {
-    text_input::Style {
-        background: Background::Color(Color::BLACK),
-        border: iced::Border::default(),
-        icon: Color::WHITE,
-        placeholder: Color::WHITE,
-        value: Color::WHITE,
-        selection: Color::from_rgb(0.3, 0.3, 0.3),
     }
 }

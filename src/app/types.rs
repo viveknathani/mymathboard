@@ -17,3 +17,16 @@ pub enum MyMathBoardMessage {
     OpenPressed,
     SaveAsPressed,
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OutputHistoryItemType {
+    PreviousInput,
+    OkOutput,
+    ErrOutput,
+}
+
+#[derive(Debug, Clone)]
+pub struct OutputHistoryItem {
+    pub value: String,
+    pub kind: OutputHistoryItemType,
+}

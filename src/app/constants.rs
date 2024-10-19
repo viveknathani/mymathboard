@@ -1,3 +1,5 @@
+use iced::Color;
+
 pub const DEFAULT_APP_WINDOW_WIDTH: f32 = 800.0;
 pub const DEFAULT_APP_WINDOW_HEIGHT: f32 = 600.0;
 pub const DEFAUTL_APP_NAME: &str = "mymathboard";
@@ -7,3 +9,4 @@ pub const APP_ICON: &[u8] = include_bytes!("../../assets/logo_64.ico");
 pub const GRAPH_THICK_LINE_WIDTH: f32 = 2.0;
 pub const GRAPH_THIN_LINE_WIDTH: f32 = 1.0;
 pub const REPL_TEXT_INPUT_ID: &str = "1";
+pub const REPL_BACKGROUND_COLOR: (u8, u8, u8) = (18, 18, 18);
