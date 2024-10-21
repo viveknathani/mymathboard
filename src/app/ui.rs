@@ -34,6 +34,7 @@ use iced::Element;
 use iced::Font;
 use iced::Length;
 use iced::Point;
+use iced::Rectangle;
 use iced::Size;
 use iced::Task;
 use image::ImageFormat;
@@ -121,8 +122,6 @@ impl MyMathBoardApp {
             MyMathBoardMessage::EndDrag => {
                 self.graph.is_dragging = false;
 
-                self.graph.last_cursor_position = None;
-
                 Task::none()
             }
             MyMathBoardMessage::ZoomIn => {
@@ -178,10 +177,33 @@ impl MyMathBoardApp {
                 .and_then(move |window| iced::window::screenshot(window))
                 .then(move |screenshot| {
                     if let Some(path) = FileDialog::new().add_filter("png", &["png"]).save_file() {
+                        // Approximate calculation for the graph pane dimensions
+                        let window_width = screenshot.size.width;
+                        let window_height = screenshot.size.height;
+
+                        let top_bar_height = 50;
+                        let bottom_bar_height = 50;
+
+                        let graph_x = 0;
+                        let graph_y = top_bar_height;
+                        let graph_width = window_width / 2;
+                        let graph_height = window_height - top_bar_height - bottom_bar_height;
+
+                        // Define the cropping region using the graph's position and dimensions
+                        let crop_region = Rectangle {
+                            x: graph_x as u32,
+                            y: graph_y as u32,
+                            width: graph_width as u32,
+                            height: graph_height as u32,
+                        };
+
+                        // Crop the screenshot to the defined region
+                        let cropped_screenshot = screenshot.crop(crop_region).unwrap();
+
                         let png = RgbaImage::from_raw(
-                            screenshot.size.width,
-                            screenshot.size.height,
-                            screenshot.bytes.to_vec(),
+                            cropped_screenshot.size.width,
+                            cropped_screenshot.size.height,
+                            cropped_screenshot.bytes.to_vec(),
                         )
                         .unwrap();
                         png.save_with_format(path, image::ImageFormat::Png).unwrap();
@@ -360,38 +382,50 @@ impl MyMathBoardApp {
             .width(Length::Fill)
             .height(Length::Fill);
 
-        let coords_text = "x: -, y: -".to_string();
+        let coords_text = format!(
+            "x: {:5.1}, y: {:5.1}",
+            self.graph
+                .last_cursor_position
+                .unwrap_or_else(|| Point::new(0.0, 0.0))
+                .x,
+            self.graph
+                .last_cursor_position
+                .unwrap_or_else(|| Point::new(0.0, 0.0))
+                .y
+        );
 
         let coords_display = Text::new(coords_text).color(Color::WHITE).size(16);
 
-        let zoom_in_button = Button::new(Text::new("+").color(Color::WHITE).size(16))
-            .padding(5)
+        let zoom_in_button = Button::new(Text::new("  +  ").color(Color::WHITE).size(14))
             .on_press(MyMathBoardMessage::ZoomIn)
+            .height(25)
+            .padding(2)
             .style(|_theme, _status| button::Style {
-                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                background: Some(Background::Color(Color::from_rgb8(52, 134, 235))),
+                border: Border::default(),
+                text_color: Color::WHITE,
                 ..Default::default()
             });
 
-        let zoom_reset_button = Button::new(Text::new("Reset").color(Color::WHITE).size(16))
-            .padding(5)
-            .style(|_theme, _status| button::Style {
-                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
-                ..Default::default()
-            });
-
-        let zoom_out_button = Button::new(Text::new("-").color(Color::WHITE).size(16))
-            .padding(5)
+        let zoom_out_button = Button::new(Text::new("  -  ").color(Color::WHITE).size(14))
             .on_press(MyMathBoardMessage::ZoomOut)
+            .height(25)
+            .padding(2)
             .style(|_theme, _status| button::Style {
-                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                background: Some(Background::Color(Color::from_rgb8(52, 134, 235))),
+                border: Border::default(),
+                text_color: Color::WHITE,
                 ..Default::default()
             });
 
-        let graph_clear_button = Button::new(Text::new("Clear").color(Color::WHITE).size(16))
-            .padding(5)
+        let graph_export_button = Button::new(Text::new("EXPORT").color(Color::WHITE).size(14))
             .on_press(MyMathBoardMessage::ExportGraph)
+            .height(25)
+            .padding(2)
             .style(|_theme, _status| button::Style {
-                background: Some(Background::Color(Color::from_rgb(0.8, 0.2, 0.2))),
+                background: Some(Background::Color(Color::from_rgb8(52, 134, 235))),
+                border: Border::default(),
+                text_color: Color::WHITE,
                 ..Default::default()
             });
 
@@ -399,12 +433,10 @@ impl MyMathBoardApp {
             .push(coords_display)
             .push(Space::with_width(Length::Fill))
             .push(zoom_in_button)
-            .push(Space::with_width(Length::Fill))
-            .push(zoom_reset_button)
-            .push(Space::with_width(Length::Fill))
+            .push(Space::with_width(Length::Fixed(10.0)))
             .push(zoom_out_button)
-            .push(Space::with_width(Length::Fill))
-            .push(graph_clear_button)
+            .push(Space::with_width(Length::Fixed(10.0)))
+            .push(graph_export_button)
             .height(Length::Fixed(30.0))
             .padding(5);
 
