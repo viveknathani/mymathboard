@@ -81,29 +81,9 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                 frame.stroke(
                     &cell,
                     Stroke::default()
-                        .with_width(1.0)
-                        .with_color(Color::from_rgb(150.0, 150.0, 150.0)),
+                        .with_width(GRAPH_THIN_LINE_WIDTH)
+                        .with_color(Color::from_rgb8(50, 50, 50)),
                 );
-
-                if x % 5 == 0 || y % 5 == 0 {
-                    let line = canvas::Path::rectangle(
-                        Point::new(
-                            (x * self.cell_size as isize) as f32 - self.viewport_offset.x,
-                            (y * self.cell_size as isize) as f32 - self.viewport_offset.y,
-                        ),
-                        cell_size,
-                    );
-                    frame.stroke(
-                        &line,
-                        Stroke::default()
-                            .with_width(GRAPH_THIN_LINE_WIDTH)
-                            .with_color(Color::from_rgb(
-                                200.0 / 255.0,
-                                200.0 / 255.0,
-                                200.0 / 255.0,
-                            )),
-                    );
-                }
             }
         }
 
@@ -114,32 +94,34 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                 .ceil() as f32;
 
             let path = canvas::Path::new(|builder: &mut canvas::path::Builder| {
-                for x in (start_x as i32)..(end_x as i32) {
-                    let x = x as f64;
-                    let calc = equation.eval_with_context(&context_map! { "x" => x}.unwrap());
+                let mut x = start_x;
+                while x < end_x {
+                    let calc =
+                        equation.eval_with_context(&context_map! { "x" => x as f64 }.unwrap());
                     if calc.is_ok() {
                         let y = calc.unwrap().as_float().unwrap();
                         let screen_x = x as f32 * self.cell_size as f32 - self.viewport_offset.x;
                         let screen_y = y as f32 * self.cell_size as f32 - self.viewport_offset.y;
 
-                        if x as i32 == start_x as i32 {
+                        if (x - start_x).abs() < f32::EPSILON {
                             builder.move_to(Point::new(screen_x, screen_y));
                         } else {
                             builder.line_to(Point::new(screen_x, screen_y));
                         }
                     }
+                    x += 0.01;
                 }
             });
             frame.stroke(
                 &path,
                 Stroke::default()
-                    .with_width(2.0)
+                    .with_width(GRAPH_THIN_LINE_WIDTH)
                     .with_color(Color::from_rgb(255.0, 0.0, 0.0)),
             );
         }
 
-        let middle_x = bounds.width / 2.0 - self.viewport_offset.x;
-        let middle_y = bounds.height / 2.0 - self.viewport_offset.y;
+        let middle_x = -self.viewport_offset.x;
+        let middle_y = -self.viewport_offset.y;
 
         let font_size = iced::Pixels(14.0);
 
