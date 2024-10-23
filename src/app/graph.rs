@@ -9,7 +9,6 @@ use iced::mouse;
 use iced::widget::canvas;
 use iced::widget::canvas::Event;
 use iced::widget::canvas::Stroke;
-use iced::widget::canvas::Text;
 use iced::Color;
 use iced::Point;
 use iced::Rectangle;
@@ -40,6 +39,39 @@ impl Default for Graph {
     }
 }
 
+impl Graph {
+    // Convert graph coordinates (x, y) to screen coordinates (screen_x, screen_y)
+    fn graph_to_screen(
+        &self,
+        x: f32,
+        y: f32,
+        offset_x: f32,
+        offset_y: f32,
+        width: f32,
+        height: f32,
+        cell_size: f32,
+    ) -> (f32, f32) {
+        let screen_x = (x - offset_x) * cell_size + width / 2.0;
+        let screen_y = height / 2.0 - (y - offset_y) * cell_size; // Flip the y-axis
+        (screen_x, screen_y)
+    }
+
+    // Convert screen coordinates (screen_x, screen_y) to graph coordinates (x, y)
+    fn screen_to_graph(
+        &self,
+        screen_x: f32,
+        screen_y: f32,
+        offset_x: f32,
+        offset_y: f32,
+        width: f32,
+        height: f32,
+    ) -> (f32, f32) {
+        let x = (screen_x - width / 2.0) + offset_x;
+        let y = offset_y - (screen_y - height / 2.0); // Flip the y-axis
+        (x, y)
+    }
+}
+
 impl canvas::Program<MyMathBoardMessage> for Graph {
     type State = ();
 
@@ -61,16 +93,16 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
         };
 
         // Calculate the visible area.
-        let start_x = (self.viewport_offset.x / self.cell_size as f32).floor() as isize;
-        let start_y = (self.viewport_offset.y / self.cell_size as f32).floor() as isize;
-        let end_x = ((self.viewport_offset.x + bounds.width as f32) / self.cell_size as f32).ceil()
-            as isize;
-        let end_y = ((self.viewport_offset.y + bounds.height as f32) / self.cell_size as f32).ceil()
-            as isize;
+        let screen_start_x = (self.viewport_offset.x / self.cell_size as f32).floor() as isize;
+        let screen_start_y = (self.viewport_offset.y / self.cell_size as f32).floor() as isize;
+        let screen_end_x = ((self.viewport_offset.x + bounds.width as f32) / self.cell_size as f32)
+            .ceil() as isize;
+        let screen_end_y = ((self.viewport_offset.y + bounds.height as f32) / self.cell_size as f32)
+            .ceil() as isize;
 
         // Draw cells for the visible area.
-        for y in start_y..end_y {
-            for x in start_x..end_x {
+        for y in screen_start_y..screen_end_y {
+            for x in screen_start_x..screen_end_x {
                 let cell = canvas::Path::rectangle(
                     Point::new(
                         (x * self.cell_size as isize) as f32 - self.viewport_offset.x,
@@ -87,21 +119,79 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
             }
         }
 
+        let (screen_center_x, screen_center_y) = self.graph_to_screen(
+            0.0,
+            0.0,
+            self.viewport_offset.x,
+            self.viewport_offset.y,
+            bounds.width,
+            bounds.height,
+            cell_size.height,
+        );
+
+        // Draw the y-axis
+        let y_axis = canvas::Path::line(
+            Point::new(screen_center_x, 0.0),
+            Point::new(screen_center_x, bounds.height),
+        );
+        frame.stroke(
+            &y_axis,
+            Stroke::default()
+                .with_width(GRAPH_THIN_LINE_WIDTH)
+                .with_color(Color::from_rgb(0.8, 0.8, 0.8)),
+        );
+
+        // Draw the x-axis
+        let x_axis = canvas::Path::line(
+            Point::new(0.0, screen_center_y),
+            Point::new(bounds.width, screen_center_y),
+        );
+        frame.stroke(
+            &x_axis,
+            Stroke::default()
+                .with_width(GRAPH_THICK_LINE_WIDTH)
+                .with_color(Color::from_rgb(0.8, 0.8, 0.8)),
+        );
+
         // Render equations in the visible area.
         for equation in &self.equations {
-            let start_x = (self.viewport_offset.x / self.cell_size as f32).floor() as f32;
-            let end_x = ((self.viewport_offset.x + bounds.width as f32) / self.cell_size as f32)
-                .ceil() as f32;
+            let start_x = self
+                .screen_to_graph(
+                    0.0,
+                    0.0,
+                    self.viewport_offset.x,
+                    self.viewport_offset.y,
+                    bounds.width,
+                    bounds.height,
+                )
+                .0;
+            let end_x = self
+                .screen_to_graph(
+                    bounds.width,
+                    0.0,
+                    self.viewport_offset.x,
+                    self.viewport_offset.y,
+                    bounds.width,
+                    bounds.height,
+                )
+                .0;
 
             let path = canvas::Path::new(|builder: &mut canvas::path::Builder| {
                 let mut x = start_x;
                 while x < end_x {
                     let calc =
                         equation.eval_with_context(&context_map! { "x" => x as f64 }.unwrap());
-                    if calc.is_ok() {
-                        let y = calc.unwrap().as_float().unwrap();
-                        let screen_x = x as f32 * self.cell_size as f32 - self.viewport_offset.x;
-                        let screen_y = y as f32 * self.cell_size as f32 - self.viewport_offset.y;
+                    if let Ok(result) = calc {
+                        let y = result.as_float().unwrap() as f32;
+                        let (screen_x, screen_y) = self.graph_to_screen(
+                            x,
+                            y,
+                            self.viewport_offset.x,
+                            self.viewport_offset.y,
+                            bounds.width,
+                            bounds.height,
+                            cell_size.height,
+                        );
 
                         if (x - start_x).abs() < f32::EPSILON {
                             builder.move_to(Point::new(screen_x, screen_y));
@@ -116,65 +206,9 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                 &path,
                 Stroke::default()
                     .with_width(GRAPH_THIN_LINE_WIDTH)
-                    .with_color(Color::from_rgb(255.0, 0.0, 0.0)),
+                    .with_color(Color::from_rgb(0.0, 255.0, 0.0)),
             );
         }
-
-        let middle_x = -self.viewport_offset.x;
-        let middle_y = -self.viewport_offset.y;
-
-        let font_size = iced::Pixels(14.0);
-
-        for x in start_x..end_x {
-            let screen_x = (x * self.cell_size as isize) as f32 - self.viewport_offset.x;
-            let number = (x * self.cell_size as isize).to_string();
-
-            if screen_x >= 0.0 && screen_x <= bounds.width {
-                frame.fill_text(Text {
-                    content: number.clone(),
-                    position: Point::new(screen_x, middle_y + font_size.0),
-                    color: Color::WHITE,
-                    size: font_size,
-                    font: iced::Font::default(),
-                    ..Default::default()
-                });
-            }
-        }
-
-        for y in start_y..end_y {
-            let screen_y = (y * self.cell_size as isize) as f32 - self.viewport_offset.y;
-            let number = (y * self.cell_size as isize).to_string();
-
-            if screen_y >= 0.0 && screen_y <= bounds.height {
-                frame.fill_text(Text {
-                    content: number.clone(),
-                    position: Point::new(middle_x + font_size.0, screen_y),
-                    color: Color::WHITE,
-                    size: font_size,
-                    font: iced::Font::default(),
-                    ..Default::default()
-                });
-            }
-        }
-
-        let zero_x = -self.viewport_offset.x;
-        let zero_y = -self.viewport_offset.y;
-        let vertical_axis =
-            canvas::Path::line(Point::new(zero_x, 0.0), Point::new(zero_x, bounds.height));
-        let horizontal_axis =
-            canvas::Path::line(Point::new(0.0, zero_y), Point::new(bounds.width, zero_y));
-        frame.stroke(
-            &vertical_axis,
-            Stroke::default()
-                .with_width(GRAPH_THICK_LINE_WIDTH)
-                .with_color(Color::WHITE),
-        );
-        frame.stroke(
-            &horizontal_axis,
-            Stroke::default()
-                .with_width(GRAPH_THICK_LINE_WIDTH)
-                .with_color(Color::WHITE),
-        );
 
         vec![frame.into_geometry()]
     }
