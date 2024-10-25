@@ -4,7 +4,7 @@ use iced::Vector;
 #[derive(Debug, Clone)]
 pub enum MyMathBoardMessage {
     Dragged(Vector),
-    StartDrag(Point),
+    StartDrag(Point, f32, f32),
     EndDrag,
     ZoomIn,
     ZoomOut,

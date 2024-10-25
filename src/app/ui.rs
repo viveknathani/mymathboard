@@ -112,10 +112,14 @@ impl MyMathBoardApp {
                 ));
                 Task::none()
             }
-            MyMathBoardMessage::StartDrag(position) => {
+            MyMathBoardMessage::StartDrag(position, width, height) => {
                 self.graph.is_dragging = true;
 
                 self.graph.last_cursor_position = Some(position);
+
+                self.graph.width = width;
+
+                self.graph.height = height;
 
                 Task::none()
             }
@@ -382,16 +386,23 @@ impl MyMathBoardApp {
             .width(Length::Fill)
             .height(Length::Fill);
 
+        let current_screen_point = self
+            .graph
+            .last_cursor_position
+            .unwrap_or_else(|| Point::new(0.0, 0.0));
+
+        let (current_screen_point_x, current_screen_point_y) = self.graph.screen_to_graph(
+            current_screen_point.x,
+            current_screen_point.y,
+            self.graph.viewport_offset.x,
+            self.graph.viewport_offset.y,
+            self.graph.width,
+            self.graph.height,
+        );
+
         let coords_text = format!(
             "x: {:5.1}, y: {:5.1}",
-            self.graph
-                .last_cursor_position
-                .unwrap_or_else(|| Point::new(0.0, 0.0))
-                .x,
-            self.graph
-                .last_cursor_position
-                .unwrap_or_else(|| Point::new(0.0, 0.0))
-                .y
+            current_screen_point_x, current_screen_point_y
         );
 
         let coords_display = Text::new(coords_text).color(Color::WHITE).size(16);

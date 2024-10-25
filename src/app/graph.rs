@@ -9,7 +9,9 @@ use iced::mouse;
 use iced::widget::canvas;
 use iced::widget::canvas::Event;
 use iced::widget::canvas::Stroke;
+use iced::widget::canvas::Text;
 use iced::Color;
+use iced::Pixels;
 use iced::Point;
 use iced::Rectangle;
 use iced::Renderer;
@@ -21,6 +23,8 @@ use iced::Vector;
 #[derive(Debug, Clone)]
 pub struct Graph {
     pub cell_size: u64,
+    pub width: f32,
+    pub height: f32,
     pub is_dragging: bool,
     pub viewport_offset: Vector,
     pub last_cursor_position: Option<Point>,
@@ -30,6 +34,8 @@ pub struct Graph {
 impl Default for Graph {
     fn default() -> Self {
         Graph {
+            width: 0.0,
+            height: 0.0,
             cell_size: DEFAULT_CELL_SIZE,
             is_dragging: false,
             viewport_offset: Vector::new(0.0, 0.0),
@@ -41,7 +47,7 @@ impl Default for Graph {
 
 impl Graph {
     // Convert graph coordinates (x, y) to screen coordinates (screen_x, screen_y)
-    fn graph_to_screen(
+    pub fn graph_to_screen(
         &self,
         x: f32,
         y: f32,
@@ -57,7 +63,7 @@ impl Graph {
     }
 
     // Convert screen coordinates (screen_x, screen_y) to graph coordinates (x, y)
-    fn screen_to_graph(
+    pub fn screen_to_graph(
         &self,
         screen_x: f32,
         screen_y: f32,
@@ -153,6 +159,50 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                 .with_color(Color::from_rgb(0.8, 0.8, 0.8)),
         );
 
+        for x in screen_start_x..screen_end_x {
+            let screen_x = (x as f32 * self.cell_size as f32) - self.viewport_offset.x;
+            let (graph_x, _) = self.screen_to_graph(
+                screen_x,
+                0.0,
+                self.viewport_offset.x,
+                self.viewport_offset.y,
+                bounds.width,
+                bounds.height,
+            );
+
+            if screen_x >= 0.0 && screen_x <= bounds.width {
+                frame.fill_text(Text {
+                    content: format!("{}", graph_x),
+                    position: Point::new(screen_x, screen_center_y + 5.0),
+                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    size: Pixels(12.0),
+                    ..Text::default()
+                });
+            }
+        }
+
+        for y in screen_start_y..screen_end_y {
+            let screen_y = (y as f32 * self.cell_size as f32) - self.viewport_offset.y;
+            let (_, graph_y) = self.screen_to_graph(
+                0.0,
+                screen_y,
+                self.viewport_offset.x,
+                self.viewport_offset.y,
+                bounds.width,
+                bounds.height,
+            );
+
+            if screen_y >= 0.0 && screen_y <= bounds.height {
+                frame.fill_text(Text {
+                    content: format!("{}", graph_y),
+                    position: Point::new(screen_center_x + 5.0, screen_y),
+                    color: Color::from_rgb(0.8, 0.8, 0.8),
+                    size: Pixels(12.0),
+                    ..Text::default()
+                });
+            }
+        }
+
         // Render equations in the visible area.
         for equation in &self.equations {
             let start_x = self
@@ -217,7 +267,7 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
         &self,
         _state: &mut (),
         event: Event,
-        _bounds: Rectangle,
+        bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> (event::Status, Option<MyMathBoardMessage>) {
         match event {
@@ -225,7 +275,11 @@ impl canvas::Program<MyMathBoardMessage> for Graph {
                 if let Some(last_position) = _cursor.position() {
                     return (
                         event::Status::Captured,
-                        Some(MyMathBoardMessage::StartDrag(last_position)),
+                        Some(MyMathBoardMessage::StartDrag(
+                            last_position,
+                            bounds.width,
+                            bounds.height,
+                        )),
                     );
                 }
                 (event::Status::Ignored, None)
